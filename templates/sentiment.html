@@ -1,216 +1,190 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>팬 감성 분석</title>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 0;
-      background: transparent;   /* 회색 배경 제거 */
-      overflow: hidden;          /* 스크롤바 제거 */
-      height: 100vh;             /* 전체 화면 높이 */
+    /* ====== 전체 배경 / 컨테이너 ====== */
+    body{
+      font-family: 'Noto Sans KR', system-ui, sans-serif;
+      margin:0;
+      background:#f3f4f6;              /* 두 번째 스샷처럼 연한 회색 */
+    }
+    .wrap{
+      max-width: 460px;                 /* 전체 폭 */
+      margin: 24px auto 40px;
+      padding: 0 14px;
+    }
+    .selector{
+      display:flex; justify-content:center; margin-bottom:14px;
+    }
+    .selector select{
+      padding:8px 12px; border-radius:8px; border:1px solid #d0d7e2; background:#fff;
+      font-size:14px;
     }
 
-    .fan-card {
-      background: #fff;
-      border-radius: 22px;
-      box-shadow: 0 4px 24px #0001;
-      max-width: 400px;          /* ✅ 폭 400px 고정 */
-      margin: 20px auto 0;
-      padding: 20px 20px 16px 20px;
-      height: calc(100vh - 60px);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+    /* ====== 카드 ====== */
+    .fan-card{
+      background:#fff;
+      border-radius:22px;
+      box-shadow:0 4px 24px #0001;
+      padding:20px 20px 16px 20px;
+      /* 높이 강제값 삭제! => 카드가 길게 안 늘어남 */
     }
 
-    .fan-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .fan-header img { width: 48px; height: 48px; border-radius: 50%; }
-    .fan-title { font-weight: bold; font-size: 1.1em; }
-    .fan-sub { color: #222; font-size: 0.9em; margin-top: 2px; }
+    .fan-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .fan-header img{width:48px;height:48px;border-radius:50%;object-fit:contain;background:#fff}
+    .fan-title{font-weight:800;font-size:20px;text-align:center;width:100%}
+    .fan-sub{color:#222;font-size:14px;margin-top:4px;text-align:center}
 
-    .fan-comments {
-      background: #f8fafd;
-      border-radius: 12px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      font-size: 0.95em;
-      flex: 1;
-      overflow: hidden;
+    /* 댓글 상자만 높이 제한해 스크롤 */
+    .fan-comments{
+      background:#f8fafd;border-radius:12px;padding:12px 14px;margin:12px 0;
+      font-size:14px; max-height:180px; overflow:auto;
     }
-    .fan-comment { padding: 4px 0; font-size: 0.9em; color: #222; }
+    .fan-comment{padding:4px 0;color:#222}
+    .nickname{
+      background:linear-gradient(135deg,#FFE5E5,#E5F3FF,#F0E5FF,#E5FFE5);
+      background-size:300% 300%; animation:gradientShift 3s ease infinite;
+      padding:2px 8px;border-radius:12px;font-weight:700;display:inline-block;margin-right:6px;color:#444;box-shadow:0 1px 3px #0000001a
+    }
+    @keyframes gradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 
-    .nickname {
-      background: linear-gradient(135deg, #FFE5E5, #E5F3FF, #F0E5FF, #E5FFE5);
-      background-size: 300% 300%;
-      animation: gradientShift 3s ease infinite;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-weight: bold;
-      display: inline-block;
-      margin-right: 6px;
-      color: #444;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    #comment-btns{display:flex;gap:8px;margin-bottom:6px}
+    #more-btn,#less-btn{
+      flex:1;background:#f5f7fa;border:1.5px solid #e0e6ef;border-radius:16px;padding:8px 0;
+      cursor:pointer;font-weight:700;color:#222;font-size:13px
     }
-    @keyframes gradientShift {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
+    #more-btn:hover,#less-btn:hover{background:#e6f0ff}
 
-    #comment-btns { display: flex; gap: 8px; margin-bottom: 6px; }
-    #more-btn, #less-btn {
-      flex: 1;
-      background: #f5f7fa;
-      border: 1.5px solid #e0e6ef;
-      border-radius: 16px;
-      padding: 8px 0;
-      cursor: pointer;
-      font-weight: bold;
-      color: #222;
-      font-size: 0.9em;
-      margin-top: 0;
-    }
-    #more-btn:hover, #less-btn:hover { background: #e6f0ff; }
-
-    .big-thermo-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      margin: 8px 0 0 0;
-    }
-    #big-thermo-svg { display: block; transform: scale(0.8); }
-    .big-thermo-info { display: flex; flex-direction: column; align-items: flex-start; }
-    .big-thermo-value { font-size: 1.8em; font-weight: bold; color: #ff5a36; margin-bottom: 5px; }
-    .big-thermo-comment { font-size: 1em; font-weight: bold; color: #222; }
+    /* ====== 온도계 ====== */
+    .big-thermo-row{display:flex;align-items:center;justify-content:center;gap:20px;margin:8px 0 0 0}
+    #big-thermo-svg{display:block}
+    .big-thermo-info{display:flex;flex-direction:column;align-items:flex-start}
+    .big-thermo-value{font-size:28px;font-weight:800;color:#ff5a36;margin-bottom:6px}
+    .big-thermo-comment{font-size:15px;font-weight:700;color:#222}
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <!-- ✅ 상단 팀 선택 드롭다운 (항상 표시) -->
+    <div class="selector">
+      <select id="team-select" aria-label="구단 선택"></select>
+    </div>
 
-  <div class="fan-card" id="team-info-card" style="display:none;">
-    <div class="fan-header">
-      <img id="team-logo" src="" alt="구단로고" />
-      <div>
-        <div id="team-name" class="fan-title"></div>
-        <div id="headline" class="fan-sub"></div>
+    <div class="fan-card" id="team-info-card" style="display:none;">
+      <div class="fan-header">
+        <img id="team-logo" src="" alt="구단로고"/>
+        <div style="flex:1">
+          <div id="team-name" class="fan-title"></div>
+          <div id="headline" class="fan-sub"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="fan-comments" id="comments-list"></div>
-    <div id="comment-btns">
-      <button id="more-btn" onclick="showMore()" style="display:none;">여론 더보기</button>
-      <button id="less-btn" onclick="showLess()" style="display:none;">간단히 보기</button>
-    </div>
+      <div class="fan-comments" id="comments-list"></div>
+      <div id="comment-btns">
+        <button id="more-btn" onclick="showMore()" style="display:none;">여론 더보기</button>
+        <button id="less-btn" onclick="showLess()" style="display:none;">간단히 보기</button>
+      </div>
 
-    <div class="big-thermo-row">
-      <svg id="big-thermo-svg" width="80" height="140" viewBox="0 0 80 140">
-        <rect x="30" y="15" width="20" height="70" rx="10" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
-        <circle cx="40" cy="95" r="20" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
-        <rect id="big-thermo-bar" x="30" y="15" width="20" height="0" rx="10" fill="#4fc3f7"/>
-        <circle id="big-thermo-bulb" cx="40" cy="95" r="16" fill="#4fc3f7"/>
-      </svg>
-      <div class="big-thermo-info">
-        <div class="big-thermo-value" id="big-thermo-value">0%</div>
-        <div class="big-thermo-comment" id="big-thermo-comment"></div>
+      <div class="big-thermo-row">
+        <svg id="big-thermo-svg" width="80" height="140" viewBox="0 0 80 140">
+          <rect x="30" y="15" width="20" height="70" rx="10" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
+          <circle cx="40" cy="95" r="20" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
+          <rect id="big-thermo-bar" x="30" y="15" width="20" height="0" rx="10" fill="#4fc3f7"/>
+          <circle id="big-thermo-bulb" cx="40" cy="95" r="16" fill="#4fc3f7"/>
+        </svg>
+        <div class="big-thermo-info">
+          <div class="big-thermo-value" id="big-thermo-value">0%</div>
+          <div class="big-thermo-comment" id="big-thermo-comment"></div>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
-let currentTeam = '';
-let allComments = [];
-let lastTeamData = {};
+let allComments=[]; let lastTeamData={};
+const TEAM_LIST=["SSG","LG","두산","키움","KIA","KT","NC","롯데","삼성","한화"]; // 셀렉트용
+const teamFullNames={ '롯데':'롯데 자이언츠','NC':'NC 다이노스','한화':'한화 이글스','삼성':'삼성 라이온즈','두산':'두산 베어스','키움':'키움 히어로즈','LG':'LG 트윈스','SSG':'SSG 랜더스','KT':'KT 위즈','KIA':'기아 타이거즈' };
 
-const teamFullNames = {
-  '롯데': '롯데 자이언츠',
-  'NC': 'NC 다이노스',
-  '한화': '한화 이글스',
-  '삼성': '삼성 라이온즈',
-  '두산': '두산 베어스',
-  '키움': '키움 히어로즈',
-  'LG': 'LG 트윈스',
-  'SSG': 'SSG 랜더스',
-  'KT': 'KT 위즈',
-  'KIA': '기아 타이거즈'
-};
-
-function updateBigThermo(temp, temp_comment) {
-  const bar = document.getElementById('big-thermo-bar');
-  const bulb = document.getElementById('big-thermo-bulb');
-  const value = document.getElementById('big-thermo-value');
-  const comment = document.getElementById('big-thermo-comment');
-  const maxH = 70;
-  const y0 = 15;
-  const h = Math.round(maxH * (temp / 100));
-  bar.setAttribute('height', h);
-  bar.setAttribute('y', y0 + maxH - h);
-  const color = temp >= 80 ? '#ff5a36' : (temp >= 40 ? '#ffd600' : '#4fc3f7');
-  bar.setAttribute('fill', color);
-  bulb.setAttribute('fill', color);
-  value.textContent = temp + '%';
-  comment.textContent = temp_comment;
+function updateBigThermo(temp,msg){
+  const bar=document.getElementById('big-thermo-bar');
+  const bulb=document.getElementById('big-thermo-bulb');
+  const value=document.getElementById('big-thermo-value');
+  const comment=document.getElementById('big-thermo-comment');
+  const maxH=70, y0=15, h=Math.round(maxH*(temp/100));
+  bar.setAttribute('height',h); bar.setAttribute('y',y0+maxH-h);
+  const color=temp>=80?'#ff5a36':(temp>=40?'#ffd600':'#4fc3f7');
+  bar.setAttribute('fill',color); bulb.setAttribute('fill',color);
+  value.textContent=temp+'%'; comment.textContent=msg;
 }
 
-function renderTeamInfo(data, showCount) {
-  document.getElementById('team-info-card').style.display = 'block';
-  document.getElementById('team-logo').src = data.logo_path;
-  document.getElementById('team-name').innerText = teamFullNames[data.team] || data.team;
-  document.getElementById('headline').innerText = data.headline || '';
+function renderTeamInfo(data, showCount){
+  document.getElementById('team-info-card').style.display='block';
+  document.getElementById('team-logo').src=data.logo_path||'';
+  document.getElementById('team-name').innerText=teamFullNames[data.team]||data.team;
+  document.getElementById('headline').innerText=data.headline||'';
 
-  allComments = data.comments || [];
-  let html = '';
-  for (let i = 0; i < Math.min(showCount, allComments.length); i++) {
-    const id = allComments[i].id && allComments[i].id.trim() ? allComments[i].id : '익명';
-    html += `<div class="fan-comment"><span class="nickname">${id}</span> ${allComments[i].comment}</div>`;
+  allComments=data.comments||[];
+  let html='';
+  for(let i=0;i<Math.min(showCount, allComments.length);i++){
+    const id=(allComments[i].id||'').trim()||'익명';
+    html+=`<div class="fan-comment"><span class="nickname">${id}</span> ${allComments[i].comment}</div>`;
   }
-  document.getElementById('comments-list').innerHTML = html;
+  document.getElementById('comments-list').innerHTML=html;
 
-  const moreBtn = document.getElementById('more-btn');
-  const lessBtn = document.getElementById('less-btn');
-  if (showCount < allComments.length) {
-    moreBtn.style.display = 'block';
-    lessBtn.style.display = 'none';
-  } else if (allComments.length > 3) {
-    moreBtn.style.display = 'none';
-    lessBtn.style.display = 'block';
-  } else {
-    moreBtn.style.display = 'none';
-    lessBtn.style.display = 'none';
-  }
+  const moreBtn=document.getElementById('more-btn');
+  const lessBtn=document.getElementById('less-btn');
+  if(showCount<allComments.length){ moreBtn.style.display='block'; lessBtn.style.display='none'; }
+  else if(allComments.length>3){ moreBtn.style.display='none'; lessBtn.style.display='block'; }
+  else { moreBtn.style.display='none'; lessBtn.style.display='none'; }
 
   updateBigThermo(data.temperature, data.temp_comment);
 }
 
-function showMore() { renderTeamInfo(lastTeamData, 10); }
-function showLess() { renderTeamInfo(lastTeamData, 3); }
+/* 드롭다운 채우기 + URL 동기화 */
+function setSelect(team){
+  const sel=document.getElementById('team-select');
+  sel.innerHTML=TEAM_LIST.map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.value=team;
+  sel.onchange=()=>{
+    const chosen=sel.value;
+    const qs=new URLSearchParams(location.search); qs.set('team', chosen);
+    history.replaceState({},'',`${location.pathname}?${qs.toString()}`);
+    fetchTeam(chosen);
+  };
+}
 
-/* ✅ 파라미터가 없어도 기본 팀으로 로드 */
-window.addEventListener('DOMContentLoaded', function () {
-  const urlParams = new URLSearchParams(window.location.search);
-  const teamParam = urlParams.get('team');
+function fetchTeam(team){
+  const url=`/api/teaminfo?team=${encodeURIComponent(team)}&count=10`;
+  fetch(url).then(r=>r.json()).then(d=>{ lastTeamData=d; renderTeamInfo(d,3); });
+}
 
-  const url = teamParam
-    ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`
-    : `/api/teaminfo?count=10`;      // 서버가 기본 팀으로 fallback
+function showMore(){ renderTeamInfo(lastTeamData, 10); }
+function showLess(){ renderTeamInfo(lastTeamData, 3); }
+
+/* 초기 로드: ?team= 없으면 서버 기본팀으로 */
+window.addEventListener('DOMContentLoaded', ()=>{
+  const qs=new URLSearchParams(location.search);
+  const teamParam=qs.get('team');
+
+  const url = teamParam ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`
+                        : `/api/teaminfo?count=10`;
 
   fetch(url)
-    .then(res => res.json())
-    .then(data => {
-      currentTeam = data.team;
-      lastTeamData = data;
-      renderTeamInfo(data, 3);
+    .then(r=>r.json())
+    .then(d=>{
+      const initialTeam = d.team || teamParam || "SSG";
+      setSelect(initialTeam);
+      lastTeamData=d;
+      renderTeamInfo(d,3);
     })
-    .catch(() => {
-      const card = document.getElementById('team-info-card');
-      card.style.display = 'block';
-      document.getElementById('team-name').innerText = '데이터를 불러오지 못했습니다';
+    .catch(()=>{
+      setSelect("SSG");
+      document.getElementById('team-info-card').style.display='block';
+      document.getElementById('team-name').innerText='데이터를 불러오지 못했습니다';
     });
 });
 </script>
-
 </body>
 </html>
