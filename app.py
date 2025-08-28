@@ -1,7 +1,11 @@
 from flask import Flask, render_template
+from flask_cors import CORS   # ✅ 추가
 from sentiment_routes import sentiment_bp
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+CORS(app)   # ✅ 모든 라우트에 CORS 허용
+
+# 블루프린트 등록
 app.register_blueprint(sentiment_bp)
 
 @app.route("/")
