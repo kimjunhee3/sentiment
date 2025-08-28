@@ -110,11 +110,16 @@ function renderTeamInfo(data, showCount){
 function showMore(){ renderTeamInfo(lastTeamData, 10); }
 function showLess(){ renderTeamInfo(lastTeamData, 3); }
 
+// ✅ team 파라미터가 없어도 기본 응답을 가져오게 변경
 window.addEventListener('DOMContentLoaded', ()=>{
   const teamParam=new URLSearchParams(location.search).get('team');
-  if(!teamParam) return; // 팀 파라미터가 없으면 빈 화면 유지(임베드용)
-  fetch(`/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`)
-    .then(r=>r.json()).then(d=>{ lastTeamData=d; renderTeamInfo(d,3); });
+  const url = teamParam
+    ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`
+    : `/api/teaminfo?count=10`;
+  fetch(url)
+    .then(r=>r.json())
+    .then(d=>{ lastTeamData=d; renderTeamInfo(d,3); })
+    .catch(()=>{ /* 필요시 에러 표시 */ });
 });
 </script>
 </body>
