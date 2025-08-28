@@ -5,7 +5,7 @@ import os
 sentiment_bp = Blueprint("sentiment", __name__, template_folder="templates", static_folder="static")
 
 # 집계 CSV 경로 (환경변수로 바꾸고 싶으면 SENT_DATA_PATH 사용)
-DATA_PATH = os.environ.get("SENT_DATA_PATH", "data/fan_sentiment.csv")
+DATA_PATH = os.environ.get("SENT_DATA_PATH", "data/sentiment_fine.csv")
 
 # 팀별 슬로건
 TEAM_SLOGANS = {
