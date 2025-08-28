@@ -1,23 +1,19 @@
-from flask import Flask, redirect, url_for
-from flask_cors import CORS
+from flask import Flask, render_template
 from sentiment_routes import sentiment_bp
-import os
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
-CORS(app, resources={r"/*": {"origins": "*"}})
 
-# 블루프린트 등록 (/sentiment, /api/*)
+# 블루프린트 등록
 app.register_blueprint(sentiment_bp)
 
 @app.route("/")
-def index():
-    # 루트로 접근하면 /sentiment로 리다이렉트
-    return redirect(url_for("sentiment.sentiment_page"))
+def home():
+    # 임베드 환경이든 직접 열든 동일한 템플릿 사용
+    return render_template("sentiment.html")
 
 @app.route("/healthz")
 def healthz():
     return "ok", 200
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8000"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=5051, debug=True, use_reloader=False)
