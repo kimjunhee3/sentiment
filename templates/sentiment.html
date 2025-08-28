@@ -9,20 +9,20 @@
       text-align: center;
       margin: 0;
       padding: 0;
-      background: transparent; /* 회색 배경 제거 */
-      overflow: hidden; /* 스크롤바 제거 */
-      height: 100vh; /* 전체 화면 높이 */
+      background: transparent;   /* 회색 배경 제거 */
+      overflow: hidden;          /* 스크롤바 제거 */
+      height: 100vh;             /* 전체 화면 높이 */
     }
 
     .fan-card {
       background: #fff;
       border-radius: 22px;
       box-shadow: 0 4px 24px #0001;
-      max-width: 400px;          /* ✅ 가로 폭 400px */
+      max-width: 400px;          /* ✅ 폭 400px 고정 */
       margin: 20px auto 0;
       padding: 20px 20px 16px 20px;
-      height: calc(100vh - 60px); /* 화면 높이에 맞춤 */
-      overflow: hidden; /* 내부 스크롤 제거 */
+      height: calc(100vh - 60px);
+      overflow: hidden;
       display: flex;
       flex-direction: column;
     }
@@ -148,27 +148,12 @@ function updateBigThermo(temp, temp_comment) {
   const h = Math.round(maxH * (temp / 100));
   bar.setAttribute('height', h);
   bar.setAttribute('y', y0 + maxH - h);
-  const color = temp >= 80 ? '#ff5a36' : temp >= 40 ? '#ffd600' : '#4fc3f7';
+  const color = temp >= 80 ? '#ff5a36' : (temp >= 40 ? '#ffd600' : '#4fc3f7');
   bar.setAttribute('fill', color);
   bulb.setAttribute('fill', color);
   value.textContent = temp + '%';
   comment.textContent = temp_comment;
 }
-
-window.addEventListener('DOMContentLoaded', function() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const teamParam = urlParams.get('team');
-  if (teamParam) {
-    currentTeam = teamParam;
-    fetch(`/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`)
-      .then(res => res.json())
-      .then(data => {
-        allComments = data.comments;
-        lastTeamData = data;
-        renderTeamInfo(data, 3);
-      });
-  }
-});
 
 function renderTeamInfo(data, showCount) {
   document.getElementById('team-info-card').style.display = 'block';
@@ -176,6 +161,7 @@ function renderTeamInfo(data, showCount) {
   document.getElementById('team-name').innerText = teamFullNames[data.team] || data.team;
   document.getElementById('headline').innerText = data.headline || '';
 
+  allComments = data.comments || [];
   let html = '';
   for (let i = 0; i < Math.min(showCount, allComments.length); i++) {
     const id = allComments[i].id && allComments[i].id.trim() ? allComments[i].id : '익명';
@@ -201,6 +187,29 @@ function renderTeamInfo(data, showCount) {
 
 function showMore() { renderTeamInfo(lastTeamData, 10); }
 function showLess() { renderTeamInfo(lastTeamData, 3); }
+
+/* ✅ 파라미터가 없어도 기본 팀으로 로드 */
+window.addEventListener('DOMContentLoaded', function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const teamParam = urlParams.get('team');
+
+  const url = teamParam
+    ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`
+    : `/api/teaminfo?count=10`;      // 서버가 기본 팀으로 fallback
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      currentTeam = data.team;
+      lastTeamData = data;
+      renderTeamInfo(data, 3);
+    })
+    .catch(() => {
+      const card = document.getElementById('team-info-card');
+      card.style.display = 'block';
+      document.getElementById('team-name').innerText = '데이터를 불러오지 못했습니다';
+    });
+});
 </script>
 
 </body>
