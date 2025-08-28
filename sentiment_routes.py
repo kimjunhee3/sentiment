@@ -2,13 +2,13 @@ from flask import Blueprint, request, jsonify, render_template, send_from_direct
 import pandas as pd
 import os
 
-
 # ---------------------------
 # 경로 기본값
 # ---------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 STATIC_LOGOS_DIR = os.path.join(BASE_DIR, "static", "logos")
+DEFAULT_TEAM = os.environ.get("DEFAULT_TEAM", "SSG")  # 없을 때 기본 팀
 
 # ---------------------------
 # 블루프린트
@@ -21,9 +21,12 @@ sentiment_bp = Blueprint(
 )
 
 # ---------------------------
-# 데이터 로드 (fan_sentiment.csv 우선, 없으면 sentiment_fine.csv)
+# 안전한 지연 로딩(앱 시작 시 CSV 없어서 죽는 것 방지)
 # ---------------------------
+_fan_df_cache = None
+
 def _load_fan_df():
+    """fan_sentiment.csv 우선, 없으면 sentiment_fine.csv를 탐색."""
     candidates = [
         os.path.join(DATA_DIR, "fan_sentiment.csv"),
         os.path.join(DATA_DIR, "sentiment_fine.csv"),
@@ -32,12 +35,21 @@ def _load_fan_df():
     ]
     for path in candidates:
         if os.path.exists(path):
-            return pd.read_csv(path)
-    raise FileNotFoundError(
-        "fan_sentiment.csv / sentiment_fine.csv 중 하나가 data/ 또는 프로젝트 루트에 필요합니다."
-    )
+            try:
+                df = pd.read_csv(path)
+                # 필수 컬럼 대략 체크
+                if "팀" in df.columns:
+                    return df
+            except Exception:
+                pass
+    # 아무것도 없으면 빈 DF 반환(서버가 죽지 않게)
+    return pd.DataFrame(columns=["팀", "긍정비율"])
 
-fan_df = _load_fan_df()
+def get_fan_df():
+    global _fan_df_cache
+    if _fan_df_cache is None:
+        _fan_df_cache = _load_fan_df()
+    return _fan_df_cache
 
 # ---------------------------
 # 정적 로고 서빙 (/logos/팀.jpg)
@@ -79,6 +91,10 @@ TEAM_LOGO_FILE = {
 # 온도 메시지/색
 # ---------------------------
 def temperature_comment(t):
+    try:
+        t = int(t)
+    except Exception:
+        t = 0
     if t <= 10: return "❄ 팬심 얼음장처럼 싸늘"
     if t <= 20: return "🧊 냉기 가득, 차가운 시선"
     if t <= 30: return "😨 불안감 감돌아, 걱정 섞인 반응"
@@ -91,6 +107,10 @@ def temperature_comment(t):
     return "❤️ 팬심 폭발! 열광적 지지 쇄도"
 
 def temperature_color(t):
+    try:
+        t = int(t)
+    except Exception:
+        t = 0
     if t <= 20:
         r, g, b = 0, 0, int(139 + (116 * (t / 20)))
     elif t <= 50:
@@ -105,18 +125,32 @@ def temperature_color(t):
 # ---------------------------
 @sentiment_bp.route("/sentiment")
 def sentiment_page():
-    # 팀 선택바 없는 임베드 전용 템플릿 (team은 쿼리파라미터로 받음)
+    # 프론트가 team 파라미터 유무에 관계없이 알아서 호출
     return render_template("sentiment.html")
 
 @sentiment_bp.route("/api/teaminfo")
 def api_teaminfo():
-    team = request.args.get("team")
-    if not team or team not in set(fan_df["팀"]):
-        # 팀이 없으면 첫 팀으로 fallback
-        team = fan_df["팀"].iloc[0]
+    df = get_fan_df()
 
-    row = fan_df[fan_df["팀"] == team].iloc[0]
-    pos = int(row["긍정비율"]) if "긍정비율" in row else 0
+    # 사용자가 지정한 팀
+    req_team = request.args.get("team")
+    teams = list(df["팀"].dropna().unique()) if "팀" in df.columns else []
+
+    # 팀 선정 로직(안전 가드)
+    if req_team and req_team in teams:
+        team = req_team
+    elif teams:
+        team = teams[0]                     # CSV의 첫 팀
+    else:
+        team = DEFAULT_TEAM                 # CSV가 전혀 없을 때 기본값
+
+    # 긍정비율
+    pos = 0
+    if "팀" in df.columns and "긍정비율" in df.columns and team in teams:
+        try:
+            pos = int(df.loc[df["팀"] == team, "긍정비율"].iloc[0])
+        except Exception:
+            pos = 0
 
     # 로고 경로
     logo_file = TEAM_LOGO_FILE.get(team, f"{team}.jpg")
@@ -128,16 +162,19 @@ def api_teaminfo():
         path = os.path.join(DATA_DIR, base)
         if not os.path.exists(path):
             continue
-        df = pd.read_csv(path)
-        id_col   = next((c for c in df.columns if "id" in c.lower() or "nickname" in c.lower()), None)
-        text_col = next((c for c in df.columns if "comment" in c.lower() or "text" in c.lower() or "댓글" in c), None)
+        try:
+            cdf = pd.read_csv(path)
+        except Exception:
+            continue
+        id_col   = next((c for c in cdf.columns if "id" in c.lower() or "nickname" in c.lower()), None)
+        text_col = next((c for c in cdf.columns if "comment" in c.lower() or "text" in c.lower() or "댓글" in c), None)
         if not text_col:
             continue
-        for _, r in df.iterrows():
-            nick = (str(r[id_col]).strip() if id_col and pd.notna(r[id_col]) else "익명")
-            text = str(r[text_col]).strip()
+        for _, r in cdf.iterrows():
+            nick = (str(r[id_col]).strip() if id_col and pd.notna(r.get(id_col)) else "익명")
+            text = str(r.get(text_col, "")).strip()
             if text:
-                comments.append({"id": nick, "comment": text})
+                comments.append({"id": nick or "익명", "comment": text})
 
     comments = comments[:10]  # 최대 10개
 
@@ -150,4 +187,3 @@ def api_teaminfo():
         "temp_comment": temperature_comment(pos),
         "comments": comments,
     })
-
