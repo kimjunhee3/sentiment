@@ -4,192 +4,158 @@
   <meta charset="UTF-8" />
   <title>팬 감성 분석</title>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      margin: 60px 0 40px;
-      background-color: #f6f7fa;
-    }
-    /* 임베드 모드(embed=1)일 때 여백 최소화/투명 배경 */
-    body.embed {
-      margin: 10px 0 0;
-      background: transparent;
-    }
+    body { font-family: 'Noto Sans KR', sans-serif; background:#f6f7fa; margin:40px 0; }
+    body.embed { margin:10px 0; background:transparent; }
 
-    select {
-      font-size: 18px;
-      padding: 5px;
-      margin-bottom: 30px;
+    .selector-wrap{ display:flex; justify-content:center; margin-bottom:18px; }
+    select{ font-size:18px; width:220px; height:44px; }
+
+    .fan-card{
+      max-width:720px; margin:0 auto; background:#fff; border-radius:24px;
+      box-shadow:0 10px 36px rgba(0,0,0,.08); padding:24px; position:relative;
     }
+    .fan-header{ display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+    .fan-header img{ width:56px; height:56px; border-radius:50%; }
+    .team-title{ font-weight:900; font-size:22px; }
+    .headline{ color:#333; margin-top:2px; }
 
-    .fan-card {
-      background: #fff; border-radius: 22px; box-shadow: 0 4px 24px #0001;
-      max-width: 540px; margin: 0 auto; padding: 24px 24px 22px;
+    .comments-box{
+      background:#f9fbff; border:1px solid #e9f0ff;
+      border-radius:14px; padding:12px 14px; margin:10px 0 14px;
     }
-    .fan-header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-    .fan-header img { width: 64px; height: 64px; border-radius: 50%; }
-    .fan-title { font-weight: bold; font-size: 1.2em; }
-    .fan-sub { color: #222; font-size: 1.05em; margin-top: 2px; }
+    .cmt{ padding:8px 10px; margin:6px 0; border-radius:10px; background:#fff; border:1px solid #eef2f7; }
+    .cmt b{ color:#111; }
 
-    .fan-comments { background: #f8fafd; border-radius: 12px; padding: 12px 14px; margin: 10px 0 14px; font-size: 1.05em; }
-    .fan-comment { padding: 6px 0; color: #222; }
+    .btns{ display:flex; gap:10px; }
+    .btn{ flex:1; padding:12px 0; border-radius:12px; background:#eef3ff; border:1px solid #dfe7ff; font-weight:700; cursor:pointer; }
 
-    .big-thermo-row {
-      display: flex; align-items: center; justify-content: center; gap: 28px; margin: 8px 0 0;
-    }
-    #big-thermo-svg { display: block; }
-    .big-thermo-info { display: flex; flex-direction: column; align-items: flex-start; }
-    .big-thermo-value { font-size: 2.0em; font-weight: bold; color: #ff5a36; margin-bottom: 6px; }
-    .big-thermo-comment { font-size: 1.1em; font-weight: bold; color: #222; }
-
-    /* 버튼 */
-    #comment-btns { display: flex; gap: 10px; margin-bottom: 6px; }
-    #more-btn, #less-btn {
-      flex: 1; background: #f5f7fa; border: 1.5px solid #e0e6ef; border-radius: 22px; padding: 12px 0;
-      cursor: pointer; font-weight: 700; color: #222; font-size: 1.05em;
-    }
-    #more-btn:hover, #less-btn:hover { background: #e6f0ff; }
-
-    /* 셀렉터 감싸는 폼 */
-    .selector-wrap { margin: 0 0 12px; }
+    .thermo-row{ display:flex; align-items:center; gap:22px; justify-content:center; margin-top:6px; }
+    #big-thermo-svg{ display:block; }
+    .thermo-info{ display:flex; flex-direction:column; align-items:flex-start; }
+    .thermo-val{ font-size:34px; font-weight:900; color:#ff5a36; }
+    .thermo-cmt{ font-size:16px; font-weight:800; color:#222; margin-top:6px; }
   </style>
 </head>
 <body>
   <div class="selector-wrap">
-    <select id="team-select" onchange="onTeamChange()" style="font-size: 1.05em; width: 220px; height: 44px;">
+    <select id="team-select" onchange="onTeamChange()">
       <option value="">구단을 선택하세요</option>
-      {% for team in team_list %}
-        <option value="{{ team }}">{{ team }}</option>
-      {% endfor %}
+      {% for team in team_list %}<option value="{{ team }}">{{ team }}</option>{% endfor %}
     </select>
   </div>
 
   <div class="fan-card" id="team-info-card" style="display:none;">
     <div class="fan-header">
-      <img id="team-logo" src="" alt="구단로고" />
+      <img id="team-logo" src="" alt="logo" />
       <div>
-        <div id="team-name" class="fan-title"></div>
-        <div id="headline" class="fan-sub"></div>
+        <div id="team-name" class="team-title"></div>
+        <div id="headline" class="headline"></div>
       </div>
     </div>
 
-    <div class="fan-comments" id="comments-list"></div>
-
-    <div id="comment-btns">
-      <button id="more-btn" onclick="showMore()" style="display:none;">여론 더보기</button>
-      <button id="less-btn" onclick="showLess()" style="display:none;">간단히 보기</button>
+    <div class="comments-box" id="comments-box" style="display:none;">
+      <div id="comments-list"></div>
+      <div class="btns">
+        <button id="more-btn" class="btn" onclick="showMore()" style="display:none;">여론 더보기</button>
+        <button id="less-btn" class="btn" onclick="showLess()" style="display:none;">간단히 보기</button>
+      </div>
     </div>
 
-    <div class="big-thermo-row">
-      <svg id="big-thermo-svg" width="80" height="140" viewBox="0 0 80 140">
-        <!-- 외곽선 -->
+    <div class="thermo-row">
+      <svg id="big-thermo-svg" width="84" height="150" viewBox="0 0 80 140">
         <rect x="30" y="15" width="20" height="70" rx="10" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
         <circle cx="40" cy="95" r="20" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
-        <!-- 채움 -->
         <rect id="big-thermo-bar" x="30" y="15" width="20" height="0" rx="10" fill="#4fc3f7"/>
         <circle id="big-thermo-bulb" cx="40" cy="95" r="16" fill="#4fc3f7"/>
       </svg>
-      <div class="big-thermo-info">
-        <div class="big-thermo-value" id="big-thermo-value">0%</div>
-        <div class="big-thermo-comment" id="big-thermo-comment">팀을 선택하세요</div>
+      <div class="thermo-info">
+        <div class="thermo-val" id="big-thermo-value">0%</div>
+        <div class="thermo-cmt" id="big-thermo-comment">팀을 선택하세요</div>
       </div>
     </div>
   </div>
 
 <script>
-  // 서버에서 전달된 초기 값
   const initialTeamFromServer = "{{ initial_team|default('') }}";
   const isEmbed = "{{ embed|default('0') }}" === "1";
-
   if (isEmbed) document.body.classList.add('embed');
 
-  let currentTeam = '';
   let allComments = [];
-  let lastTeamData = {};
+  let lastData = null;
 
   const teamFullNames = {
-    '롯데': '롯데 자이언츠', 'NC': 'NC 다이노스', '한화': '한화 이글스', '삼성': '삼성 라이온즈',
-    '두산': '두산 베어스', '키움': '키움 히어로즈', 'LG': 'LG 트윈스', 'SSG': 'SSG 랜더스',
-    'KT': 'KT 위즈', 'KIA': '기아 타이거즈'
+    '롯데':'롯데 자이언츠','NC':'NC 다이노스','한화':'한화 이글스','삼성':'삼성 라이온즈',
+    '두산':'두산 베어스','키움':'키움 히어로즈','LG':'LG 트윈스','SSG':'SSG 랜더스',
+    'KT':'KT 위즈','KIA':'기아 타이거즈'
   };
 
-  function updateBigThermo(temp, temp_comment) {
+  function updateThermo(t, msg){
     const bar = document.getElementById('big-thermo-bar');
     const bulb = document.getElementById('big-thermo-bulb');
-    const value = document.getElementById('big-thermo-value');
-    const comment = document.getElementById('big-thermo-comment');
-    const maxH = 70, y0 = 15;
-    const t = Math.max(0, Math.min(100, Number(temp)||0));
-    const h = Math.round(maxH * (t / 100));
-    bar.setAttribute('height', h);
-    bar.setAttribute('y', y0 + maxH - h);
-    let color = t >= 80 ? '#ff5a36' : t >= 40 ? '#ffd600' : '#4fc3f7';
-    bar.setAttribute('fill', color);
-    bulb.setAttribute('fill', color);
-    value.textContent = t + '%';
-    comment.textContent = temp_comment || '';
+    const val = document.getElementById('big-thermo-value');
+    const cmt = document.getElementById('big-thermo-comment');
+    const maxH=70, y0=15; const temp = Math.max(0, Math.min(100, Number(t)||0));
+    const h = Math.round(maxH*(temp/100));
+    bar.setAttribute('height', h); bar.setAttribute('y', y0+maxH-h);
+    const color = temp>=80 ? '#ff5a36' : temp>=40 ? '#ffd600' : '#4fc3f7';
+    bar.setAttribute('fill', color); bulb.setAttribute('fill', color);
+    val.textContent = temp+'%'; cmt.textContent = msg||'';
   }
 
-  function renderTeamInfo(data, showCount) {
-    document.getElementById('team-info-card').style.display = 'block';
-    document.getElementById('team-logo').src = data.logo_path || '';
+  function renderComments(showCount){
+    const box = document.getElementById('comments-box');
+    const list = document.getElementById('comments-list');
+    if (!allComments.length){ box.style.display='none'; return; }
+    box.style.display='block';
+    let html='';
+    for (let i=0;i<Math.min(showCount, allComments.length);i++){
+      const id = (allComments[i].id||'').trim() || '익명';
+      html += `<div class="cmt"><b>@${id}</b> ${allComments[i].comment||''}</div>`;
+    }
+    list.innerHTML = html;
+    const more = document.getElementById('more-btn');
+    const less = document.getElementById('less-btn');
+    if (showCount < allComments.length){ more.style.display='block'; less.style.display='none'; }
+    else if (allComments.length>3){ more.style.display='none'; less.style.display='block'; }
+    else { more.style.display='none'; less.style.display='none'; }
+
+    if (isEmbed && window.parent){
+      setTimeout(()=>{
+        const h = document.documentElement.scrollHeight || document.body.scrollHeight || 560;
+        window.parent.postMessage({type:'resize-sentiment-iframe', height:h}, '*');
+      }, 30);
+    }
+  }
+
+  function renderCard(data, initialCount=3){
+    lastData = data;
+    document.getElementById('team-info-card').style.display='block';
+    document.getElementById('team-logo').src = data.logo_path||'';
     document.getElementById('team-name').innerText = teamFullNames[data.team] || data.team || '';
     document.getElementById('headline').innerText = data.headline || '';
-
     allComments = data.comments || [];
-    lastTeamData = data;
-
-    let html = '';
-    for (let i = 0; i < Math.min(showCount, allComments.length); i++) {
-      const id = (allComments[i].id||'').trim() || '익명';
-      html += `<div class="fan-comment"><b>${id}</b> ${allComments[i].comment || ''}</div>`;
-    }
-    document.getElementById('comments-list').innerHTML = html;
-
-    const moreBtn = document.getElementById('more-btn');
-    const lessBtn = document.getElementById('less-btn');
-    if (showCount < allComments.length) { moreBtn.style.display = 'block'; lessBtn.style.display = 'none'; }
-    else if (allComments.length > 3) { moreBtn.style.display = 'none'; lessBtn.style.display = 'block'; }
-    else { moreBtn.style.display = 'none'; lessBtn.style.display = 'none'; }
-
-    updateBigThermo(data.temperature, data.temp_comment);
-
-    // 임베드 상황에서 높이 자동 조절
-    if (isEmbed && window.parent) {
-      setTimeout(() => {
-        const h = document.documentElement.scrollHeight || document.body.scrollHeight || 560;
-        window.parent.postMessage({ type: 'resize-sentiment-iframe', height: h }, '*');
-      }, 50);
-    }
+    renderComments(initialCount);
+    updateThermo(data.temperature, data.temp_comment);
   }
 
-  function showMore() { renderTeamInfo(lastTeamData, 10); }
-  function showLess() { renderTeamInfo(lastTeamData, 3); }
+  function showMore(){ renderComments(10); }
+  function showLess(){ renderComments(3); }
 
-  function onTeamChange() {
+  function onTeamChange(){
     const team = document.getElementById('team-select').value;
-    currentTeam = team;
-    if (!team) { document.getElementById('team-info-card').style.display = 'none'; return; }
-    fetch(`/api/teaminfo?team=${encodeURIComponent(team)}`)
-      .then(res => res.json())
-      .then(data => renderTeamInfo(data, 3))
-      .catch(() => { /* 에러 시 무시 */ });
+    if (!team){ document.getElementById('team-info-card').style.display='none'; return; }
+    fetch(`/api/teaminfo?team=${encodeURIComponent(team)}&count=10`)
+      .then(r=>r.json()).then(d=>renderCard(d,3))
+      .catch(()=>{});
   }
 
-  // 초기 자동 선택: URL ?team= 가 우선, 없으면 서버가 내려준 initial 값
-  window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', ()=>{
     const sel = document.getElementById('team-select');
     const urlTeam = new URLSearchParams(window.location.search).get('team');
-    const firstChoice = urlTeam || initialTeamFromServer;
-    if (firstChoice) {
-      const opt = [...sel.options].find(o => o.value === firstChoice);
-      if (opt) { sel.value = firstChoice; onTeamChange(); }
-    }
-    if (isEmbed && window.parent) {
-      setTimeout(() => {
-        const h = document.documentElement.scrollHeight || document.body.scrollHeight || 560;
-        window.parent.postMessage({ type: 'resize-sentiment-iframe', height: h }, '*');
-      }, 50);
+    const t = urlTeam || initialTeamFromServer;
+    if (t){
+      const opt = [...sel.options].find(o => o.value === t);
+      if (opt){ sel.value = t; onTeamChange(); }
     }
   });
 </script>
