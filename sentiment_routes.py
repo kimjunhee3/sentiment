@@ -1,18 +1,13 @@
-from flask import Blueprint, request, jsonify, render_template, send_from_directory
+from flask import Blueprint, request, jsonify, render_template, send_from_directory, abort
 import pandas as pd
 import os
 
-# ---------------------------
-# 경로 기본값
-# ---------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data"))
 STATIC_LOGOS_DIR = os.path.join(BASE_DIR, "static", "logos")
-DEFAULT_TEAM = os.environ.get("DEFAULT_TEAM", "SSG")  # 없을 때 기본 팀
+DATA_LOGOS_DIR = os.path.join(DATA_DIR, "logos")  # ✅ 깃에 올린 위치 반영
+DEFAULT_TEAM = os.environ.get("DEFAULT_TEAM", "SSG")
 
-# ---------------------------
-# 블루프린트
-# ---------------------------
 sentiment_bp = Blueprint(
     "sentiment",
     __name__,
@@ -20,29 +15,20 @@ sentiment_bp = Blueprint(
     static_folder="static",
 )
 
-# ---------------------------
-# 안전한 지연 로딩(앱 시작 시 CSV 없어서 죽는 것 방지)
-# ---------------------------
 _fan_df_cache = None
 
 def _load_fan_df():
-    """fan_sentiment.csv 우선, 없으면 sentiment_fine.csv를 탐색."""
-    candidates = [
+    for path in [
         os.path.join(DATA_DIR, "fan_sentiment.csv"),
         os.path.join(DATA_DIR, "sentiment_fine.csv"),
         "fan_sentiment.csv",
         "sentiment_fine.csv",
-    ]
-    for path in candidates:
+    ]:
         if os.path.exists(path):
             try:
-                df = pd.read_csv(path)
-                # 필수 컬럼 대략 체크
-                if "팀" in df.columns:
-                    return df
+                return pd.read_csv(path)
             except Exception:
                 pass
-    # 아무것도 없으면 빈 DF 반환(서버가 죽지 않게)
     return pd.DataFrame(columns=["팀", "긍정비율"])
 
 def get_fan_df():
@@ -51,16 +37,19 @@ def get_fan_df():
         _fan_df_cache = _load_fan_df()
     return _fan_df_cache
 
-# ---------------------------
-# 정적 로고 서빙 (/logos/팀.jpg)
-# ---------------------------
+# ---------- 로고 서빙: static/logos 와 data/logos 둘 다 지원 ----------
 @sentiment_bp.route("/logos/<path:filename>")
 def serve_logo_files(filename):
-    return send_from_directory(STATIC_LOGOS_DIR, filename)
+    # 우선 static
+    static_path = os.path.join(STATIC_LOGOS_DIR, filename)
+    if os.path.exists(static_path):
+        return send_from_directory(STATIC_LOGOS_DIR, filename)
+    # 다음 data
+    data_path = os.path.join(DATA_LOGOS_DIR, filename)
+    if os.path.exists(data_path):
+        return send_from_directory(DATA_LOGOS_DIR, filename)
+    abort(404)
 
-# ---------------------------
-# 구단 슬로건 / 로고 파일명 매핑
-# ---------------------------
 TEAM_SLOGANS = {
     "한화": "최강 한화! 이글스의 불꽃을 함께 피워요",
     "KIA": "남행열차! 타이거즈의 승리를 향해 달려요!",
@@ -74,27 +63,23 @@ TEAM_SLOGANS = {
     "KT":  "우리는 kt wiz! 마법같은 시즌을 위해!",
 }
 
+# ✅ png 기준으로 매핑(없으면 자동 fallback)
 TEAM_LOGO_FILE = {
-    "KIA": "KIA.jpg",
-    "두산": "두산.jpg",
-    "LG": "LG.jpg",
-    "키움": "키움.jpg",
-    "KT": "KT.jpg",
-    "한화": "한화.jpg",
-    "롯데": "롯데.jpg",
-    "NC": "NC.jpg",
-    "삼성": "삼성.jpg",
-    "SSG": "SSG.jpg",
+    "KIA": "KIA.png",
+    "두산": "두산.png",
+    "LG": "LG.png",
+    "키움": "키움.png",
+    "KT": "KT.png",
+    "한화": "한화.png",
+    "롯데": "롯데.png",
+    "NC": "NC.png",
+    "삼성": "삼성.png",
+    "SSG": "SSG.png",
 }
 
-# ---------------------------
-# 온도 메시지/색
-# ---------------------------
 def temperature_comment(t):
-    try:
-        t = int(t)
-    except Exception:
-        t = 0
+    try: t = int(t)
+    except: t = 0
     if t <= 10: return "❄ 팬심 얼음장처럼 싸늘"
     if t <= 20: return "🧊 냉기 가득, 차가운 시선"
     if t <= 30: return "😨 불안감 감돌아, 걱정 섞인 반응"
@@ -107,10 +92,8 @@ def temperature_comment(t):
     return "❤️ 팬심 폭발! 열광적 지지 쇄도"
 
 def temperature_color(t):
-    try:
-        t = int(t)
-    except Exception:
-        t = 0
+    try: t = int(t)
+    except: t = 0
     if t <= 20:
         r, g, b = 0, 0, int(139 + (116 * (t / 20)))
     elif t <= 50:
@@ -120,31 +103,35 @@ def temperature_color(t):
         r, g, b = 255, 0, 0
     return f"rgb({r},{g},{b})"
 
-# ---------------------------
-# 페이지 / API
-# ---------------------------
+# ---------- 팀 목록 API (드롭다운용) ----------
+@sentiment_bp.route("/api/teams")
+def api_teams():
+    df = get_fan_df()
+    teams = []
+    if "팀" in df.columns:
+        teams = [t for t in df["팀"].dropna().unique().tolist() if str(t).strip()]
+    # 데이터가 없다면 표준 10개라도 내려주기
+    if not teams:
+        teams = ["SSG","LG","두산","키움","KIA","KT","NC","롯데","삼성","한화"]
+    return jsonify({"teams": teams, "default": DEFAULT_TEAM})
+
 @sentiment_bp.route("/sentiment")
 def sentiment_page():
-    # 프론트가 team 파라미터 유무에 관계없이 알아서 호출
     return render_template("sentiment.html")
 
 @sentiment_bp.route("/api/teaminfo")
 def api_teaminfo():
     df = get_fan_df()
-
-    # 사용자가 지정한 팀
-    req_team = request.args.get("team")
     teams = list(df["팀"].dropna().unique()) if "팀" in df.columns else []
 
-    # 팀 선정 로직(안전 가드)
-    if req_team and req_team in teams:
+    req_team = request.args.get("team")
+    if req_team and (not teams or req_team in teams):
         team = req_team
     elif teams:
-        team = teams[0]                     # CSV의 첫 팀
+        team = teams[0]
     else:
-        team = DEFAULT_TEAM                 # CSV가 전혀 없을 때 기본값
+        team = DEFAULT_TEAM
 
-    # 긍정비율
     pos = 0
     if "팀" in df.columns and "긍정비율" in df.columns and team in teams:
         try:
@@ -152,11 +139,25 @@ def api_teaminfo():
         except Exception:
             pos = 0
 
-    # 로고 경로
-    logo_file = TEAM_LOGO_FILE.get(team, f"{team}.jpg")
-    logo_path = f"/logos/{logo_file}"
+    # 로고 파일명: 매핑 → 팀명.png → 팀명.jpg 순서로 탐색
+    candidate = TEAM_LOGO_FILE.get(team, f"{team}.png")
+    logo_candidates = [
+        os.path.join(STATIC_LOGOS_DIR, candidate),
+        os.path.join(DATA_LOGOS_DIR, candidate),
+        os.path.join(STATIC_LOGOS_DIR, f"{team}.jpg"),
+        os.path.join(DATA_LOGOS_DIR, f"{team}.jpg"),
+        os.path.join(STATIC_LOGOS_DIR, f"{team}.png"),
+        os.path.join(DATA_LOGOS_DIR, f"{team}.png"),
+    ]
+    logo_file = None
+    for p in logo_candidates:
+        if os.path.exists(p):
+            logo_file = os.path.basename(p)
+            break
+    # 최종 경로(serve_logo_files가 양쪽 디렉토리를 지원)
+    logo_path = f"/logos/{logo_file}" if logo_file else ""
 
-    # 댓글 수집: data/{team}_유튜브.csv, data/{team}_댓글.csv
+    # 댓글 로드
     comments = []
     for base in (f"{team}_유튜브.csv", f"{team}_댓글.csv"):
         path = os.path.join(DATA_DIR, base)
@@ -175,8 +176,7 @@ def api_teaminfo():
             text = str(r.get(text_col, "")).strip()
             if text:
                 comments.append({"id": nick or "익명", "comment": text})
-
-    comments = comments[:10]  # 최대 10개
+    comments = comments[:10]
 
     return jsonify({
         "team": team,
