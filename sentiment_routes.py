@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, send_from_direct
 import pandas as pd
 import os
 
+
 # ---------------------------
 # 경로 기본값
 # ---------------------------
