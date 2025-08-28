@@ -4,60 +4,39 @@
   <meta charset="UTF-8" />
   <title>팬 감성 분석</title>
   <style>
-    /* ====== 전체 배경 / 컨테이너 ====== */
     body{
-      font-family: 'Noto Sans KR', system-ui, sans-serif;
-      margin:0;
-      background:#f3f4f6;              /* 두 번째 스샷처럼 연한 회색 */
+      font-family:'Noto Sans KR',system-ui,sans-serif;
+      margin:0;background:#f3f4f6;
     }
-    .wrap{
-      max-width: 460px;                 /* 전체 폭 */
-      margin: 24px auto 40px;
-      padding: 0 14px;
-    }
-    .selector{
-      display:flex; justify-content:center; margin-bottom:14px;
-    }
-    .selector select{
-      padding:8px 12px; border-radius:8px; border:1px solid #d0d7e2; background:#fff;
-      font-size:14px;
-    }
+    .wrap{max-width:460px;margin:24px auto 40px;padding:0 14px}
+    .selector{display:flex;justify-content:center;margin-bottom:14px}
+    .selector select{padding:8px 12px;border-radius:8px;border:1px solid #d0d7e2;background:#fff;font-size:14px}
 
-    /* ====== 카드 ====== */
-    .fan-card{
-      background:#fff;
-      border-radius:22px;
-      box-shadow:0 4px 24px #0001;
-      padding:20px 20px 16px 20px;
-      /* 높이 강제값 삭제! => 카드가 길게 안 늘어남 */
-    }
-
+    .fan-card{background:#fff;border-radius:22px;box-shadow:0 4px 24px #0001;padding:20px 20px 16px 20px}
     .fan-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
     .fan-header img{width:48px;height:48px;border-radius:50%;object-fit:contain;background:#fff}
     .fan-title{font-weight:800;font-size:20px;text-align:center;width:100%}
     .fan-sub{color:#222;font-size:14px;margin-top:4px;text-align:center}
 
-    /* 댓글 상자만 높이 제한해 스크롤 */
-    .fan-comments{
-      background:#f8fafd;border-radius:12px;padding:12px 14px;margin:12px 0;
-      font-size:14px; max-height:180px; overflow:auto;
-    }
+    /* 댓글 박스 – 높이 제한 + 페이드 전환 */
+    .fan-comments{background:#f8fafd;border-radius:12px;padding:12px 14px;margin:12px 0;font-size:14px;max-height:180px;overflow:hidden}
     .fan-comment{padding:4px 0;color:#222}
     .nickname{
       background:linear-gradient(135deg,#FFE5E5,#E5F3FF,#F0E5FF,#E5FFE5);
-      background-size:300% 300%; animation:gradientShift 3s ease infinite;
-      padding:2px 8px;border-radius:12px;font-weight:700;display:inline-block;margin-right:6px;color:#444;box-shadow:0 1px 3px #0000001a
+      background-size:300% 300%;animation:gradientShift 3s ease infinite;
+      padding:2px 8px;border-radius:12px;font-weight:700;display:inline-block;margin-right:6px;color:#444;box-shadow:0 1px 3px #0001
     }
     @keyframes gradientShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 
-    #comment-btns{display:flex;gap:8px;margin-bottom:6px}
-    #more-btn,#less-btn{
-      flex:1;background:#f5f7fa;border:1.5px solid #e0e6ef;border-radius:16px;padding:8px 0;
-      cursor:pointer;font-weight:700;color:#222;font-size:13px
-    }
-    #more-btn:hover,#less-btn:hover{background:#e6f0ff}
+    /* 페이드 애니메이션 */
+    .fade-enter{opacity:0;transform:translateY(6px)}
+    .fade-enter-active{opacity:1;transform:translateY(0);transition:opacity .35s ease, transform .35s ease}
+    .fade-exit{opacity:1}
+    .fade-exit-active{opacity:0;transition:opacity .25s ease}
 
-    /* ====== 온도계 ====== */
+    #comment-btns{display:flex;gap:8px;margin-bottom:6px}
+    #more-btn,#less-btn{display:none} /* 자동 로테이션이므로 버튼 숨김 */
+
     .big-thermo-row{display:flex;align-items:center;justify-content:center;gap:20px;margin:8px 0 0 0}
     #big-thermo-svg{display:block}
     .big-thermo-info{display:flex;flex-direction:column;align-items:flex-start}
@@ -67,7 +46,6 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- ✅ 상단 팀 선택 드롭다운 (항상 표시) -->
     <div class="selector">
       <select id="team-select" aria-label="구단 선택"></select>
     </div>
@@ -81,11 +59,7 @@
         </div>
       </div>
 
-      <div class="fan-comments" id="comments-list"></div>
-      <div id="comment-btns">
-        <button id="more-btn" onclick="showMore()" style="display:none;">여론 더보기</button>
-        <button id="less-btn" onclick="showLess()" style="display:none;">간단히 보기</button>
-      </div>
+      <div class="fan-comments" id="comments-list" title="마우스를 올리면 일시정지됩니다"></div>
 
       <div class="big-thermo-row">
         <svg id="big-thermo-svg" width="80" height="140" viewBox="0 0 80 140">
@@ -103,8 +77,13 @@
   </div>
 
 <script>
-let allComments=[]; let lastTeamData={};
-const TEAM_LIST=["SSG","LG","두산","키움","KIA","KT","NC","롯데","삼성","한화"]; // 셀렉트용
+let allComments = [];          // 전체 댓글
+let lastTeamData = {};         // 최근 팀 데이터
+let rotateTimer = null;        // setInterval 핸들
+const VISIBLE_COUNT = 3;       // 한 번에 보일 댓글 수
+const INTERVAL_MS = 3000;      // 변경 주기
+
+const TEAM_LIST=["SSG","LG","두산","키움","KIA","KT","NC","롯데","삼성","한화"];
 const teamFullNames={ '롯데':'롯데 자이언츠','NC':'NC 다이노스','한화':'한화 이글스','삼성':'삼성 라이온즈','두산':'두산 베어스','키움':'키움 히어로즈','LG':'LG 트윈스','SSG':'SSG 랜더스','KT':'KT 위즈','KIA':'기아 타이거즈' };
 
 function updateBigThermo(temp,msg){
@@ -119,27 +98,54 @@ function updateBigThermo(temp,msg){
   value.textContent=temp+'%'; comment.textContent=msg;
 }
 
-function renderTeamInfo(data, showCount){
+/* 댓글 박스를 페이드 전환과 함께 렌더링 */
+function renderComments(slice){
+  const box = document.getElementById('comments-list');
+  // exit
+  box.classList.remove('fade-enter','fade-enter-active');
+  box.classList.add('fade-exit');
+  setTimeout(()=>{
+    box.classList.add('fade-exit-active');
+    setTimeout(()=>{
+      // 교체
+      box.innerHTML = slice.map(c=>{
+        const id = (c.id||'').trim() || '익명';
+        return `<div class="fan-comment"><span class="nickname">${id}</span> ${c.comment}</div>`;
+      }).join('');
+      // enter
+      box.classList.remove('fade-exit','fade-exit-active');
+      box.classList.add('fade-enter');
+      requestAnimationFrame(()=> box.classList.add('fade-enter-active'));
+    }, 180);
+  }, 0);
+}
+
+/* 자동 회전 시작/정지 */
+function startRotate(){
+  stopRotate();
+  if (!allComments || allComments.length <= VISIBLE_COUNT) return;
+  rotateTimer = setInterval(()=>{
+    // 앞에서 VISIBLE_COUNT만큼 꺼내 뒤에 붙이는 방식으로 순환
+    const moved = allComments.splice(0, VISIBLE_COUNT);
+    allComments = allComments.concat(moved);
+    renderComments(allComments.slice(0, VISIBLE_COUNT));
+  }, INTERVAL_MS);
+}
+function stopRotate(){
+  if (rotateTimer){ clearInterval(rotateTimer); rotateTimer = null; }
+}
+
+/* 팀 카드 렌더 */
+function renderTeamInfo(data){
   document.getElementById('team-info-card').style.display='block';
   document.getElementById('team-logo').src=data.logo_path||'';
   document.getElementById('team-name').innerText=teamFullNames[data.team]||data.team;
   document.getElementById('headline').innerText=data.headline||'';
-
-  allComments=data.comments||[];
-  let html='';
-  for(let i=0;i<Math.min(showCount, allComments.length);i++){
-    const id=(allComments[i].id||'').trim()||'익명';
-    html+=`<div class="fan-comment"><span class="nickname">${id}</span> ${allComments[i].comment}</div>`;
-  }
-  document.getElementById('comments-list').innerHTML=html;
-
-  const moreBtn=document.getElementById('more-btn');
-  const lessBtn=document.getElementById('less-btn');
-  if(showCount<allComments.length){ moreBtn.style.display='block'; lessBtn.style.display='none'; }
-  else if(allComments.length>3){ moreBtn.style.display='none'; lessBtn.style.display='block'; }
-  else { moreBtn.style.display='none'; lessBtn.style.display='none'; }
-
   updateBigThermo(data.temperature, data.temp_comment);
+
+  allComments = (data.comments||[]).slice();    // 복사
+  renderComments(allComments.slice(0, VISIBLE_COUNT));
+  startRotate();
 }
 
 /* 드롭다운 채우기 + URL 동기화 */
@@ -155,29 +161,34 @@ function setSelect(team){
   };
 }
 
+/* 팀 데이터 fetch */
 function fetchTeam(team){
-  const url=`/api/teaminfo?team=${encodeURIComponent(team)}&count=10`;
-  fetch(url).then(r=>r.json()).then(d=>{ lastTeamData=d; renderTeamInfo(d,3); });
+  stopRotate();
+  const url=`/api/teaminfo?team=${encodeURIComponent(team)}&count=50`; // ✅ 댓글 많이 받기
+  fetch(url).then(r=>r.json()).then(d=>{ lastTeamData=d; renderTeamInfo(d); });
 }
 
-function showMore(){ renderTeamInfo(lastTeamData, 10); }
-function showLess(){ renderTeamInfo(lastTeamData, 3); }
+/* 일시정지: 마우스 오버 / 탭 전환 */
+document.addEventListener('visibilitychange', ()=> document.hidden ? stopRotate() : startRotate());
+document.addEventListener('DOMContentLoaded', ()=>{
+  const box=document.getElementById('comments-list');
+  box.addEventListener('mouseenter', stopRotate);
+  box.addEventListener('mouseleave', startRotate);
+});
 
-/* 초기 로드: ?team= 없으면 서버 기본팀으로 */
+/* 초기 로드 */
 window.addEventListener('DOMContentLoaded', ()=>{
   const qs=new URLSearchParams(location.search);
   const teamParam=qs.get('team');
-
-  const url = teamParam ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=10`
-                        : `/api/teaminfo?count=10`;
-
+  const url = teamParam ? `/api/teaminfo?team=${encodeURIComponent(teamParam)}&count=50`
+                        : `/api/teaminfo?count=50`;
   fetch(url)
     .then(r=>r.json())
     .then(d=>{
       const initialTeam = d.team || teamParam || "SSG";
       setSelect(initialTeam);
       lastTeamData=d;
-      renderTeamInfo(d,3);
+      renderTeamInfo(d);
     })
     .catch(()=>{
       setSelect("SSG");
