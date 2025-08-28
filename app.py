@@ -13,4 +13,7 @@ def healthz():
     return "ok", 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    # Railway 등에서 PORT 환경변수 설정 시 자동 사용됨 (gunicorn 사용 시 무시)
+    import os
+    port = int(os.environ.get("PORT", "8000"))
+    app.run(host="0.0.0.0", port=port, debug=False)
