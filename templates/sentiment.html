@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>팬 감성 분석</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 60px;
+      background-color: #f5f5f5;
+    }
+
+    select {
+      font-size: 18px;
+      padding: 5px;
+      margin-bottom: 30px;
+    }
+
+    .thermometer {
+      position: relative;
+      margin: 20px auto;
+      width: 60px;
+      height: 300px;
+      background: #ddd;
+      border-radius: 30px;
+      overflow: hidden;
+    }
+
+    .fill {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      transition: height 0.5s ease-in-out, background-color 0.5s ease-in-out;
+    }
+
+    .temp-label {
+      font-size: 22px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .comment {
+      font-size: 20px;
+      margin-top: 10px;
+      color: #555;
+    }
+
+    .headline {
+      margin-top: 40px;
+      font-size: 24px;
+      color: #333;
+      font-weight: bold;
+    }
+    .big-thermo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      margin: 38px 0 0 0;
+    }
+    #big-thermo-svg { display: block; }
+    .big-thermo-info { display: flex; flex-direction: column; align-items: flex-start; }
+    .big-thermo-value { font-size: 2.4em; font-weight: bold; color: #ff5a36; margin-bottom: 10px; }
+    .big-thermo-comment { font-size: 1.25em; font-weight: bold; color: #222; }
+    .headline-box {
+      margin-left: 24px;
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #333;
+      min-width: 220px;
+    }
+  </style>
+</head>
+<body>
+  <form method="get">
+    <select id="team-select" onchange="onTeamChange()" style="margin: 32px auto 0; display: block; font-size: 1.2em; width: 220px; height: 44px;">
+      <option value="">구단을 선택하세요</option>
+      {% for team in team_list %}
+        <option value="{{ team }}">{{ team }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <div class="fan-card" id="team-info-card" style="display:none;">
+    <div class="fan-header">
+      <img id="team-logo" src="" alt="구단로고" />
+      <div>
+        <div id="team-name" class="fan-title"></div>
+        <div id="headline" class="fan-sub"></div> <!-- 슬로건/응원문구 위치 -->
+        <!-- team-temp-comment는 fan-header에서 제거 -->
+      </div>
+    </div>
+    <div class="fan-comments" id="comments-list"></div>
+    <div id="comment-btns">
+      <button id="more-btn" onclick="showMore()" style="display:none;">여론 더보기</button>
+      <button id="less-btn" onclick="showLess()" style="display:none;">간단히 보기</button>
+    </div>
+    <div class="big-thermo-row">
+      <svg id="big-thermo-svg" width="80" height="140" viewBox="0 0 80 140">
+        <!-- 외곽선 -->
+        <rect x="30" y="15" width="20" height="70" rx="10" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
+        <circle cx="40" cy="95" r="20" fill="#f6f7fa" stroke="#bbb" stroke-width="4"/>
+        <!-- 채움 -->
+        <rect id="big-thermo-bar" x="30" y="15" width="20" height="0" rx="10" fill="#4fc3f7"/>
+        <circle id="big-thermo-bulb" cx="40" cy="95" r="16" fill="#4fc3f7"/>
+      </svg>
+      <div class="big-thermo-info">
+        <div class="big-thermo-value" id="big-thermo-value">85%</div>
+        <div class="big-thermo-comment" id="big-thermo-comment">팬심이 불타오르고 있어요!</div>
+      </div>
+      <!-- headline-box는 완전히 제거 -->
+    </div>
+  </div>
+
+<script>
+let currentTeam = '';
+let allComments = [];
+let lastTeamData = {};
+
+const teamFullNames = {
+  '롯데': '롯데 자이언츠',
+  'NC': 'NC 다이노스',
+  '한화': '한화 이글스',
+  '삼성': '삼성 라이온즈',
+  '두산': '두산 베어스',
+  '키움': '키움 히어로즈',
+  'LG': 'LG 트윈스',
+  'SSG': 'SSG 랜더스',
+  'KT': 'KT 위즈',
+  'KIA': '기아 타이거즈'
+};
+
+function updateBigThermo(temp, temp_comment) {
+  const bar = document.getElementById('big-thermo-bar');
+  const bulb = document.getElementById('big-thermo-bulb');
+  const value = document.getElementById('big-thermo-value');
+  const comment = document.getElementById('big-thermo-comment');
+  const maxH = 70;
+  const y0 = 15;
+  const h = Math.round(maxH * (temp / 100));
+  bar.setAttribute('height', h);
+  bar.setAttribute('y', y0 + maxH - h);
+  let color = temp >= 80 ? '#ff5a36' : temp >= 40 ? '#ffd600' : '#4fc3f7';
+  bar.setAttribute('fill', color);
+  bulb.setAttribute('fill', color);
+  value.textContent = temp + '%';
+  comment.textContent = temp_comment;
+}
+
+function onTeamChange() {
+  const team = document.getElementById('team-select').value;
+  currentTeam = team;
+  if (!team) {
+    document.getElementById('team-info-card').style.display = 'none';
+    return;
+  }
+  fetch(`/api/teaminfo?team=${encodeURIComponent(team)}&count=10`)
+    .then(res => res.json())
+    .then(data => {
+      allComments = data.comments;
+      lastTeamData = data;
+      renderTeamInfo(data, 3);
+    });
+}
+
+function renderTeamInfo(data, showCount) {
+  document.getElementById('team-info-card').style.display = 'block';
+  document.getElementById('team-logo').src = data.logo_path;
+  document.getElementById('team-name').innerText = teamFullNames[data.team] || data.team;
+  document.getElementById('headline').innerText = data.headline || '';
+  // team-temp-comment는 fan-header에서 제거, 온도계 옆에서만 사용
+  let html = '';
+  for (let i = 0; i < Math.min(showCount, allComments.length); i++) {
+    const id = allComments[i].id && allComments[i].id.trim() ? allComments[i].id : '익명';
+    html += `<div class="fan-comment"><b>${id}</b> ${allComments[i].comment}</div>`;
+  }
+  document.getElementById('comments-list').innerHTML = html;
+  const moreBtn = document.getElementById('more-btn');
+  const lessBtn = document.getElementById('less-btn');
+  if (showCount < allComments.length) {
+    moreBtn.style.display = 'block';
+    lessBtn.style.display = 'none';
+  } else if (allComments.length > 3) {
+    moreBtn.style.display = 'none';
+    lessBtn.style.display = 'block';
+  } else {
+    moreBtn.style.display = 'none';
+    lessBtn.style.display = 'none';
+  }
+  updateBigThermo(data.temperature, data.temp_comment);
+}
+
+function showMore() {
+  renderTeamInfo(lastTeamData, 10);
+}
+function showLess() {
+  renderTeamInfo(lastTeamData, 3);
+}
+</script>
+
+<style>
+body { background: #f6f7fa; }
+.fan-card {
+  background: #fff; border-radius: 22px; box-shadow: 0 4px 24px #0001;
+  max-width: 540px; margin: 40px auto 0; padding: 32px 32px 28px 32px;
+}
+.fan-header { display: flex; align-items: center; gap: 18px; margin-bottom: 16px; }
+.fan-header img { width: 64px; height: 64px; border-radius: 50%; }
+.fan-title { font-weight: bold; font-size: 1.3em; }
+.fan-sub { color: #222; font-size: 1.1em; margin-top: 2px; }
+.fan-desc { color: #888; font-size: 1em; margin-top: 2px; }
+.fan-comments { background: #f8fafd; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; font-size: 1.1em; }
+.fan-comment { padding: 6px 0; font-size: 1.08em; color: #222; }
+#comment-btns { display: flex; gap: 12px; margin-bottom: 8px; }
+#more-btn, #less-btn { flex: 1; background: #f5f7fa; border: 1.5px solid #e0e6ef; border-radius: 22px; padding: 14px 0; cursor: pointer; font-weight: bold; color: #222; font-size: 1.1em; margin-top: 0; }
+#more-btn:hover, #less-btn:hover { background: #e6f0ff; }
+</style>
+</body>
+</html>
